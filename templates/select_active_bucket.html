@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Select Active Bucket</title>
+  </head>
+  <body>
+    <h1>Select Active Bucket</h1>
+    <form method="post" action="/set-active-bucket">
+      <label for="bucket_name">Select Bucket:</label>
+      <select id="bucket_name" name="bucket_name">
+        {{BUCKET_OPTIONS}}
+      </select>
+      <button type="submit">Set Active Bucket</button>
+    </form>
+  </body>
+</html>
