@@ -1,242 +1,172 @@
-from fastapi import FastAPI, Form, UploadFile, File
-from fastapi.responses import HTMLResponse
-from fastapi.responses import StreamingResponse
+import os
+import mimetypes
+import urllib.parse
+from pathlib import Path
+from fastapi import FastAPI, Form, UploadFile, File, Request
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from google.cloud import storage
 from google.api_core.exceptions import Conflict, NotFound
-from datetime import timedelta
-import urllib.parse
-from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
 
+# Set up Jinja2 templates
+templates = Jinja2Templates(directory="templates")
+
 # Google Cloud Storage setup
-BUCKET_NAME = "mybucket_trialkc"
+BUCKET_NAME = "mybucket_trialkc"  # Default bucket
 storage_client = storage.Client()
 bucket = storage_client.bucket(BUCKET_NAME)
 
 @app.post("/set-active-bucket")
 async def set_active_bucket(bucket_name: str = Form(...)):
-    global BUCKET_NAME
-    BUCKET_NAME = bucket_name  # Update BUCKET_NAME with the selected bucket
+    global BUCKET_NAME, bucket
+    BUCKET_NAME = bucket_name
+    bucket = storage_client.bucket(BUCKET_NAME)  # Update the bucket object
     return RedirectResponse(url="/", status_code=303)
 
-# read html files that are stored differently
-def load_html(filename):
-    with open(f"templates/{filename}", "r", encoding="utf-8") as file:
-        return file.read()
-
 @app.get("/", response_class=HTMLResponse)
-async def main_page():
-    return load_html("index.html").replace("{{BUCKET_NAME}}", BUCKET_NAME)
+async def main_page(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "BUCKET_NAME": BUCKET_NAME})
 
-
-#fast api file uploading 
-# Update current bucket
 @app.get("/select-active-bucket", response_class=HTMLResponse)
-async def select_active_bucket():
-    # List all buckets in the project
-    buckets = storage_client.list_buckets()
-    
-    bucket_list_html = ""
-    for bucket in buckets:
-        bucket_list_html += f'<option value="{bucket.name}">{bucket.name}</option>'
-    
-    # Provide the form for selecting an active bucket
-    return load_html("select_active_bucket.html").replace("{{BUCKET_OPTIONS}}", bucket_list_html)
+async def select_active_bucket(request: Request):
+    try:
+        buckets = storage_client.list_buckets()
+        bucket_list = [bucket.name for bucket in buckets]
+        print("Available Buckets:", bucket_list)
 
+        if not bucket_list:
+            return HTMLResponse("<h2>No buckets found in the active project.</h2>")
+        bucket_options = "".join([f'<option value="{name}">{name}</option>' for name in bucket_list])
+        return templates.TemplateResponse("select_active_bucket.html", {"request": request, "BUCKET_OPTIONS": bucket_list}  # Pass the list directly
+)
 
-#BUCKETS
+    except Exception as e:
+        return HTMLResponse(f"<h2>Error retrieving buckets: {str(e)}</h2>")
 
-#create bucket html and gcp edits
 @app.get("/create-bucket-form", response_class=HTMLResponse)
-async def create_bucket_form():
-    return load_html("create_bucket.html")
+async def create_bucket_form(request: Request):
+    return templates.TemplateResponse("create_bucket.html", {"request": request})
 
 @app.post("/create-bucket")
 async def create_bucket(bucket_name: str = Form(...)):
     try:
         existing_bucket = storage_client.get_bucket(bucket_name)
         if existing_bucket:
-            return f"<h2>Bucket '{bucket_name}' already exists.</h2>"
-
+            return HTMLResponse(f"<h2>Bucket '{bucket_name}' already exists.</h2>")
     except NotFound:
-        # Create the bucket if it does not exist
         new_bucket = storage_client.create_bucket(bucket_name)
-        return f"<h2>Bucket '{new_bucket.name}' created successfully.</h2>"
-
+        return HTMLResponse(f"<h2>Bucket '{new_bucket.name}' created successfully.</h2>")
     except Exception as e:
-        return f"<h2>Error creating bucket: {str(e)}</h2>"
+        return HTMLResponse(f"<h2>Error creating bucket: {str(e)}</h2>")
 
-
-#list buckets
 @app.get("/list-buckets", response_class=HTMLResponse)
-async def list_buckets():
+async def list_buckets(request: Request):
     try:
-        # List all the buckets in the project
         buckets = storage_client.list_buckets()
-        
-        if not buckets:
-            return "<h2>No buckets found in the active project.</h2>"
-
-        # Generate HTML for bucket list
-        bucket_list_html = ""
-        for bucket in buckets:
-            bucket_list_html += f'<li>{bucket.name}</li>'
-
-        # Load the HTML template and inject the bucket list
-        template = load_html("list_buckets.html")
-        return template.replace("{{BUCKETS}}", bucket_list_html)
-
+        bucket_list = [bucket.name for bucket in buckets]
+        if not bucket_list:
+            return HTMLResponse("<h2>No buckets found in the active project.</h2>")
+        buckets_html = "".join([f"<li>{name}</li>" for name in bucket_list])
+        return templates.TemplateResponse(
+            "list_buckets.html",
+            {"request": request, "BUCKETS": buckets_html}
+        )
     except Exception as e:
-        return f"<h2>Error retrieving buckets: {str(e)}</h2>"
+        return HTMLResponse(f"<h2>Error retrieving buckets: {str(e)}</h2>")
 
-
-#delete bucket html & gcp
 @app.get("/delete-bucket-form", response_class=HTMLResponse)
-async def delete_bucket_form():
-    return load_html("delete_bucket.html")
+async def delete_bucket_form(request: Request):
+    return templates.TemplateResponse("delete_bucket.html", {"request": request})
 
 @app.post("/delete-bucket")
 async def delete_bucket(bucket_name: str = Form(...)):
     try:
         bucket_to_delete = storage_client.get_bucket(bucket_name)
         bucket_to_delete.delete()
-        return f"<h2>Bucket '{bucket_name}' deleted successfully.</h2>"
+        return HTMLResponse(f"<h2>Bucket '{bucket_name}' deleted successfully.</h2>")
     except NotFound:
-        return f"<h2>Bucket '{bucket_name}' not found.</h2>"
+        return HTMLResponse(f"<h2>Bucket '{bucket_name}' not found.</h2>")
     except Exception as e:
-        return f"<h2>Error deleting bucket: {str(e)}</h2>"
+        return HTMLResponse(f"<h2>Error deleting bucket: {str(e)}</h2>")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#upload html & gcp
 @app.get("/upload-form", response_class=HTMLResponse)
-async def upload_form():
-    return load_html("upload.html")
+async def upload_form(request: Request):
+    return templates.TemplateResponse("upload.html", {"request": request})
 
+def _upload_file_to_gcs(blob_name, file_obj, content_type):
+    bucket = storage_client.bucket(BUCKET_NAME)
+    blob = bucket.blob(blob_name)
+    blob.chunk_size = 10 * 1024 * 1024
+    blob.upload_from_file(file_obj=file_obj, content_type=content_type)
+    return {"message": f"File '{blob_name}' uploaded successfully in chunks."}
 
-#100 mb - 50 sec
-#255 mb - 1:50 min
-#1 gb - 4:30 min
 @app.post("/upload")
 async def upload_large_file(file: UploadFile = File(...)):
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(BUCKET_NAME)
-    blob = bucket.blob(file.filename)
+    file_type = file.content_type or "application/octet-stream"
+    result = _upload_file_to_gcs(file.filename, file.file, file_type)
+    return HTMLResponse(f"<h2>{result['message']}</h2><p><a href='/'>Back to Home</a></p>")
 
-    chunk_size = 10 * 1024 * 1024  # 10 mb chunk
-    chunk_size = 10 * 1024 * 1024  # 10 MB chunk
-    with file.file as f:
-        chunk = f.read(chunk_size)
-        while chunk:
-            blob.upload_from_string(chunk)
-            chunk = f.read(chunk_size)  # Read the next chunk
+@app.get("/upload-directory-form", response_class=HTMLResponse)
+async def upload_directory_form(request: Request):
+    return templates.TemplateResponse("upload_directory.html", {"request": request, "BUCKET_NAME": BUCKET_NAME})
 
-
-    return {"message": f"File '{file.filename}' uploaded successfully in chunks."}
-
-
-#100 mb file - 1 minute
-#255 mb - 1.30 minute
-#1 gb - 4 minutes
-
-# @app.post("/upload")
-# async def upload_large_file(file: UploadFile = File(...)):
-#     storage_client = storage.Client()
-#     bucket = storage_client.bucket(BUCKET_NAME)
-#     blob = bucket.blob(file.filename)
-
-#     # Open the file and stream it directly to Google Cloud Storage
-#     with file.file as f:
-#         blob.upload_from_file(f, content_type=file.content_type)
-
-#     return {"message": f"File uploaded: gs://your-bucket-name/{file.filename}"}
-
-
-# took 10 mins to upload 100 mb file with upload internet speed of 5 mbps
-# @app.post("/upload")
-# async def upload_large_file(file: UploadFile = File(...)):
-#     try:
-#         blob = bucket.blob(file.filename)
-
-#         resumable_url = blob.create_resumable_upload_session(content_type=file.content_type)
-
-#         with file.file as file_obj:
-#             blob.upload_from_file(
-#                 file_obj,
-#                 content_type=file.content_type,
-#                 rewind=True,
-#                 timeout=900  
-#             )
-
-#         return {"message": f"File '{file.filename}' uploaded successfully to bucket '{BUCKET_NAME}'"}
-
-#     except Exception as e:
-#         return {"error": f"Error uploading file: {str(e)}"}
-
-
-
-
+@app.post("/upload-directory")
+async def upload_directory(directory_path: str = Form(...)):
+    try:
+        if not os.path.isdir(directory_path):
+            return HTMLResponse(f"<h2>Directory '{directory_path}' does not exist or is not a directory.</h2>")
+        base_dir = os.path.basename(os.path.normpath(directory_path))
+        uploaded_files = []
+        for root, _, files in os.walk(directory_path):
+            for filename in files:
+                local_file_path = os.path.join(root, filename)
+                relative_path = os.path.relpath(local_file_path, directory_path)
+                blob_name = f"{base_dir}/{relative_path.replace(os.path.sep, '/')}"
+                content_type = mimetypes.guess_type(local_file_path)[0] or "application/octet-stream"
+                with open(local_file_path, "rb") as f:
+                    result = _upload_file_to_gcs(blob_name, f, content_type)
+                    uploaded_files.append(blob_name)
+        return HTMLResponse(
+            f"<h2>Uploaded {len(uploaded_files)} files successfully.</h2>"
+            f"<ul>{''.join([f'<li>{file}</li>' for file in uploaded_files])}</ul>"
+            f"<p><a href='/'>Back to Home</a></p>"
+        )
+    except Exception as e:
+        return HTMLResponse(f"<h2>Error uploading directory: {str(e)}</h2>")
 
 def safe_filename(filename: str) -> str:
     return urllib.parse.quote(filename)
 
 @app.get("/retrieve-files", response_class=HTMLResponse)
-async def retrieve_files():
+async def retrieve_files(request: Request):
     try:
-        #all blobs in the bucket
-        blobs = list(bucket.list_blobs())
-        
+        current_bucket = storage_client.bucket(BUCKET_NAME)
+        blobs = list(current_bucket.list_blobs())
         if not blobs:
-            return "<h2>No files found in the active bucket.</h2>"
-
-        file_list_html = "<h2>Files in Active Bucket</h2><ul>"
-        for blob in blobs:
-            #file name encoding because some files may contain space and special characters
-            encoded_filename = safe_filename(blob.name)
-            file_list_html += f'<li>{blob.name} <a href="/download-file/{encoded_filename}"><img src="https://img.icons8.com/ios/50/000000/download.png" alt="Download" width="15" height="15" /></a></li>'
-
-        file_list_html += "</ul>"
-
-        return load_html("retrieve_files.html").replace("{{FILES}}", file_list_html)
+            return HTMLResponse("<h2>No files found in the active bucket.</h2>")
+        files = [{"name": blob.name, "encoded_name": safe_filename(blob.name)} for blob in blobs]
+        return templates.TemplateResponse(
+    "retrieve_files.html",
+    {"request": request, "FILES": files}
+)
 
     except Exception as e:
-        return f"<h2>Error retrieving files: {str(e)}</h2>"
+        return HTMLResponse(f"<h2>Error retrieving files: {str(e)}</h2>")
 
-@app.get("/download-file/{filename}")
-async def download_file(filename: str):
+@app.get("/download-file/{filename:path}")
+async def download_file(filename: Path):
     try:
-        #decode the file name to its original so it stays the same
-        decoded_filename = urllib.parse.unquote(filename)
-        blob = bucket.blob(decoded_filename)
+        decoded_filename = urllib.parse.unquote(str(filename))
+        current_bucket = storage_client.bucket(BUCKET_NAME)
+        blob = current_bucket.blob(decoded_filename)
 
         if not blob.exists():
-            return f"<h2>File '{decoded_filename}' not found in the bucket.</h2>"
+            return HTMLResponse(f"<h2>File '{decoded_filename}' not found in the bucket.</h2>")
 
-        #downloading
         file_stream = blob.open("rb")
-        
-        # utf-8 because i was getting error while downloading file with -
         headers = {"Content-Disposition": f"attachment; filename*=utf-8''{urllib.parse.quote(decoded_filename)}"}
-        
         return StreamingResponse(file_stream, media_type="application/octet-stream", headers=headers)
-    
     except Exception as e:
-        return f"<h2>Error downloading file: {str(e)}</h2>"
+        return HTMLResponse(f"<h2>Error downloading file: {str(e)}</h2>")

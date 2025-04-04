@@ -1,9 +1,9 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Retrieved Files</title>
-  </head>
-  <body>
-    {{FILES}}
-  </body>
-</html>
+<ul>
+  {% for file in FILES %}
+  <li>
+    <a href="{{ url_for('download_file', filename=file.encoded_name) }}">
+      {{ file.name }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
