@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Live Task Status</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2em;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin-bottom: 20px;
+        cursor: pointer;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      li {
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Live Upload Task Statuses</h2>
+    <ul id="taskList"></ul>
+
+    <script>
+      async function fetchTasks() {
+        try {
+          const response = await fetch("/tasks");
+          if (!response.ok) throw new Error("Server error");
+
+          const tasks = await response.json();
+          const list = document.getElementById("taskList");
+          list.innerHTML = "";
+
+          if (Object.keys(tasks).length === 0) {
+            list.innerHTML = "<li>No tasks found.</li>";
+            return;
+          }
+
+          for (const [taskId, taskInfo] of Object.entries(tasks)) {
+            const li = document.createElement("li");
+            li.innerHTML = `<strong>Task ID:</strong> ${taskId}<br>
+                            <strong>Directory:</strong> ${
+                              taskInfo.directory_path || "N/A"
+                            }<br>
+                           <strong>Status:</strong> ${taskInfo.status}<br>
+                           <strong>Files:</strong> ${
+                             taskInfo.files.length
+                           } files processed`;
+            list.appendChild(li);
+          }
+        } catch (error) {
+          console.error("Failed to fetch tasks:", error);
+        }
+      }
+
+      // Auto-refresh every 5 seconds
+      setInterval(fetchTasks, 5000);
+
+      // Initial fetch
+      fetchTasks();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{% extends "base.html" %} {% block title %}Upload Directory to {{ BUCKET_NAME
+}}{% endblock %} {% block content %}
+<div class="form-container">
+  <h2>Upload a Directory to {{ BUCKET_NAME }}</h2>
+  <form action="/upload-directory" method="post" enctype="multipart/form-data">
+    <label for="directory_path">Enter Directory Path:</label><br />
+    <input
+      type="text"
+      id="directory_path"
+      name="directory_path"
+      placeholder="e.g., /Users/YourName/dir1 (uploads as dir1/)"
+      required
+    />
+    <button type="submit">Upload Directory</button>
+  </form>
+  <p><a href="/">Back to Home</a></p>
+</div>
+{% endblock %}

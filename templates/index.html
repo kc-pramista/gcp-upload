@@ -1,0 +1,19 @@
+{% extends "base.html" %} {% block title %}File Upload{% endblock %} {% block
+content %}
+<div class="content-container">
+  <h1>Active Bucket: {{ BUCKET_NAME }}</h1>
+  <button onclick="location.href='/select-active-bucket'">Update Bucket</button>
+  <h2>Bucket Management</h2>
+  <button onclick="location.href='/create-bucket-form'">Create Bucket</button>
+  <button onclick="location.href='/list-buckets'">List Buckets</button>
+  <button onclick="location.href='/delete-bucket-form'">Delete Bucket</button>
+  <h2>File Management</h2>
+  <button onclick="location.href='/upload-form'">Upload File</button>
+  <button onclick="location.href='/upload-directory-form'">
+    Upload a directory
+  </button>
+  <button onclick="location.href='/retrieve-files'">Retrieve Files</button>
+
+  <button onclick="location.href='/task-status'">Check Task Status</button>
+</div>
+{% endblock %}

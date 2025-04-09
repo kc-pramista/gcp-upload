@@ -1,0 +1,12 @@
+{% extends "base.html" %} {% block title %}Create Bucket{% endblock %} {% block
+content %}
+<div class="form-container">
+  <h2>Create a New GCP Bucket</h2>
+  <form action="/create-bucket" method="post">
+    <label for="bucket_name">Enter Bucket Name:</label><br />
+    <input type="text" id="bucket_name" name="bucket_name" required />
+    <button type="submit">Create Bucket</button>
+  </form>
+  <p><a href="/">Back to Home</a></p>
+</div>
+{% endblock %}

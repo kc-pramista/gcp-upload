@@ -1,0 +1,10 @@
+{% extends "base.html" %} {% block title %}List of Buckets{% endblock %} {%
+block content %}
+<div class="content-container">
+  <h2>Buckets in Active Project</h2>
+  <ul>
+    {{ BUCKETS|safe }}
+  </ul>
+  <p><a href="/">Back to Home</a></p>
+</div>
+{% endblock %}

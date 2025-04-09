@@ -1,0 +1,7 @@
+<ul>
+  {% for file in FILES %}
+  <li>
+    <a href="/download-file/{{ file.encoded_name }}"> {{ file.name }} </a>
+  </li>
+  {% endfor %}
+</ul>
