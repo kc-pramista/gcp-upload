@@ -106,10 +106,40 @@ def _upload_file_to_gcs(blob_name, file_obj, content_type):
     return {"message": f"File '{blob_name}' uploaded successfully in chunks."}
 
 @app.post("/upload")
-async def upload_large_file(file: UploadFile = File(...)):
-    file_type = file.content_type or "application/octet-stream"
-    result = _upload_file_to_gcs(file.filename, file.file, file_type)
-    return HTMLResponse(f"<h2>{result['message']}</h2><p><a href='/'>Back to Home</a></p>")
+async def upload_large_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    task_id = str(uuid.uuid4())
+    async with task_lock:
+        task_status[task_id] = {
+            "status": "pending",
+            "file": file.filename
+        }
+
+    background_tasks.add_task(upload_file_task, task_id, file)
+    return {"message": "Upload started", "task_id": task_id}
+
+async def upload_file_task(task_id: str, file: UploadFile):
+    try:
+        file_type = file.content_type or "application/octet-stream"
+        blob_name = file.filename
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(blob_name)
+        blob.chunk_size = 10 * 1024 * 1024
+        blob.upload_from_file(file.file, content_type=file_type)
+
+        async with task_lock:
+            task_status[task_id] = {
+                "status": "completed",
+                "file": blob_name,
+                "message": f"File '{blob_name}' uploaded successfully."
+            }
+
+    except Exception as e:
+        async with task_lock:
+            task_status[task_id] = {
+                "status": f"failed: {str(e)}",
+                "file": None
+            }
+
 
 @app.get("/upload-directory-form", response_class=HTMLResponse)
 async def upload_directory_form(request: Request):
@@ -190,10 +220,16 @@ async def upload_directory(background_tasks: BackgroundTasks, directory_path: st
         task_status[task_id] = {
             "status": "pending", 
             "files": [],
-            "directory_path": directory_path}
-    
-    background_tasks.add_task(upload_directory_task, task_id, directory_path)
+            "directory_path": directory_path
+        }
+
+    # Run the blocking task in a thread
+    def threaded_upload():
+        asyncio.run(upload_directory_task(task_id, directory_path))
+
+    background_tasks.add_task(threaded_upload)
     return {"message": "Upload started", "task_id": task_id}
+
 
 def safe_filename(filename: str) -> str:
     return urllib.parse.quote(filename)
